@@ -185,4 +185,4 @@ This firmware commands pyrotechnic outputs. Test with igniters disconnected and 
 
 Fly under an established safety code — NAR or Tripoli in the US — at a sanctioned launch site, with the certification and waivers your motor class requires. Staged flights carry their own additional restrictions; check them against your club's rules before assuming this firmware's staging logic is legal for your setup.
 
-This is amateur hardware with known open bugs. Use it at your own risk.
+Use it at your own risk.
