@@ -1,8 +1,6 @@
 # dual-nano-flight-computer
-Dual Arduino Nano flight computer for model rockets. One Nano handles sensor data, telemetry, and logging, while the second manages staging and parachute deployment.
-# dual-nano-flight-computer
 
-A two-board flight computer for high-power model rockets, built on a pair of Arduino Nanos. The design splits real-time flight control from data recording so that a stall, SD write, or filesystem error on the logging board can never delay a deployment decision.
+A two-board flight computer for model rockets, built on a pair of Arduino Nanos. The design splits real-time flight control from telemetry so that a stall, SD write, or filesystem error on the logging board can never delay a deployment decision.
 
 Written in C++ as a set of Arduino sketches, with a small Python utility for decoding flight data on the ground.
 
@@ -12,7 +10,7 @@ Written in C++ as a set of Arduino sketches, with a small Python utility for dec
 
 ## Architecture
 
-Early versions ran everything on one Nano (preserved under `main.ino/`). That design had a structural problem: SD card writes on an AVR are blocking and occasionally slow, and the same loop that stalled waiting on a flush was also the loop responsible for detecting apogee and firing the recovery charge. A 200 ms hiccup at the wrong moment is a lawn dart.
+Early versions ran everything on one Nano (preserved under `main.ino/`). That design had a structural problem: SD card writes are blocking and occasionally slow, and the telemetry loop was the same loop responsible for detecting apogee, firing the recovery charge, and thrust vectoring. 
 
 The current design puts those responsibilities on separate microcontrollers:
 
@@ -47,13 +45,6 @@ Shared between the two boards: `uart_protocol.hpp` (frame format, message and ev
 
 Both boards use the same state model: a `FlightState` base class with `enter` / `update` / `exit`, and a `FlightContext` holding sensor data, timers, and state pointers. `FlightMachine` wires the concrete state instances together at startup.
 
-```
-PRELAUNCH ──> BOOST ──> COAST ──> APOGEE ──> DESCENT ──> LANDED
-                 │                              ▲
-                 └── [stage 2 ignition]         │
-                                                │
-              timer failsafe ───────────────────┘
-```
 
 **Prelaunch** — Idle on the pad. Watches for sustained vertical acceleration above `LAUNCH_ACCEL_THRESHOLD`. Requires `LAUNCH_CONSECUTIVE` readings in a row so a bump on the rail doesn't trigger it. On confirmation: starts telemetry collection and arms the timer failsafe.
 
@@ -185,10 +176,6 @@ These are open and worth understanding before flying this firmware.
 **The EMA filter is disabled and zeroes the integrator.** `DistanceAlgorithm::ALPHA` is `0.0f`, which reduces the filter update to `filteredAccel = filteredAccel`. Since `reset()` sets it to zero, `filteredAccel` stays zero for the whole flight, so velocity and distance never leave zero. In its current state the apogee-velocity check and the 75 m deployment trigger will not fire, and recovery depends entirely on the timer failsafe. `ALPHA` needs a real value (start around 0.1–0.3) before this flies.
 
 **Tilt lockout is not active.** The stage 2 tilt check is commented out in `main.ino/boost_state.cpp` and absent from `nano2_control/boost_state.cpp`, so `MAX_ALLOWED_TILT_DEGREES` is currently unused and stage 2 will light regardless of attitude at first burnout. Reinstating this is the highest-priority fix in the repo — a tilt inhibit is standard practice for staged flights and most clubs require one.
-
-**Log file handle is left open on flush.** `file.close()` is commented out in `FlightContext::flushTelemetry()`, relying on `flush()` alone. It works, but leaks a file handle per flush on the legacy single-board firmware.
-
-**`parser.py` comments are stale.** They describe a 32-byte sample with padding; the struct is 28 bytes on AVR with no padding, and the format string already matches. Only the comments are wrong.
 
 ---
 
